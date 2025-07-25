@@ -6,13 +6,13 @@
 
       <!-- 🗂 File Input -->
       <input type="file" @change="onUpload" accept="image/*" />
-      <select v-model="selectedRatio" @change="updateCanvasSize">
-        <option disabled value="">ขนาดภาพ</option>
-        <option value="1:1">1:1</option>
-        <option value="4:5">4:5</option>
-      </select>
-      <!-- 🎛 Frame Dropdown (after image upload) -->
-      <select v-if="userImg" v-model="selectedFrame" @change="onFrameChange">
+
+      <!-- 📐 Ratio Selection -->
+
+      <h2 value="4:5">4:5</h2>
+
+      <!-- 🎨 Frame Selector (shows after upload) -->
+      <select v-if="imageLoaded" v-model="currentFrame" @change="handleFrameChange">
         <option disabled value="">เลือกกรอบ</option>
         <option v-for="i in 6" :key="i" :value="`frame${i}.png`">กรอบที่ {{ i }}</option>
       </select>
@@ -38,25 +38,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
-
+import { ref, reactive } from 'vue'
 import { useToast } from 'vue-toastification'
 
 const toast = useToast()
 
-toast.success('ดาวน์โหลดภาพสำเร็จ! 🎉')
-toast.error('เกิดข้อผิดพลาดในการอัปโหลด')
-const canvasWidth = 1080
-const canvasHeight = 1350
+// Refs and canvas config
 const canvasRef = ref<HTMLCanvasElement | null>(null)
-const containerRef = ref<HTMLDivElement | null>(null)
+const canvasWidth = ref(1080)
+const canvasHeight = ref(1080)
+const imageLoaded = ref(false)
 
-const selectedRatio = ref<'1:1' | '4:5'>('1:1')
-const selectedFrame = ref('frame1.png')
-
-// Canvas Size
-const canvasSize = reactive({ width: 1080, height: 1080 })
-
+const currentFrame = ref('')
 const transform = reactive({
   offsetX: 0,
   offsetY: 0,
@@ -70,66 +63,72 @@ const state = reactive({
   dragStartY: 0,
 })
 
-const userImg = ref<HTMLImageElement | null>(null)
+const framePaths = [
+  'frame1.png',
+  'frame2.png',
+  'frame3.png',
+  'frame4.png',
+  'frame5.png',
+  'frame6.png',
+]
+
+let userImg: HTMLImageElement | null = null
 let frameImg = new Image()
 
-function updateCanvasSize() {
-  if (selectedRatio.value === '1:1') {
-    canvasSize.width = 1080
-    canvasSize.height = 1080
-  } else {
-    canvasSize.width = 1080
-    canvasSize.height = 1350
-  }
-  resizeCanvas()
-  drawCanvas()
+function getRandomFramePath(): string {
+  const index = Math.floor(Math.random() * framePaths.length)
+  return framePaths[index]
 }
 
+// 📤 Upload Image
 function onUpload(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
-
+  imageLoaded.value = false
   const reader = new FileReader()
   reader.onload = (event) => {
-    userImg.value = new Image()
-    userImg.value.onload = () => {
+    userImg = new Image()
+    userImg.onload = () => {
+      // Fit image logic...
+      const scaleX = canvasWidth.value / userImg!.width
+      const scaleY = canvasHeight.value / userImg!.height
+      transform.scale = Math.min(scaleX, scaleY)
+
       transform.offsetX = 0
       transform.offsetY = 0
-      transform.scale = 1
       transform.rotation = 0
 
+      // Load frame
       frameImg = new Image()
-      frameImg.src = selectedFrame.value
+      frameImg.src = currentFrame.value || getRandomFramePath()
+
       frameImg.onload = () => {
+        imageLoaded.value = true // ✅ Mark image + frame ready
         drawCanvas()
       }
     }
-    userImg.value.src = event.target?.result as string
+
+    userImg.src = event.target?.result as string
   }
   reader.readAsDataURL(file)
 }
 
-function onFrameChange() {
-  frameImg = new Image()
-  frameImg.src = selectedFrame.value
-  frameImg.onload = () => {
-    drawCanvas()
-  }
-}
-
 function drawCanvas() {
-  if (!canvasRef.value || !userImg.value) return
+  if (!canvasRef.value || !userImg) return
   const ctx = canvasRef.value.getContext('2d')!
-  ctx.clearRect(0, 0, canvasSize.width, canvasSize.height)
+  ctx.clearRect(0, 0, canvasWidth.value, canvasHeight.value)
 
   ctx.save()
-  ctx.translate(canvasSize.width / 2 + transform.offsetX, canvasSize.height / 2 + transform.offsetY)
+  ctx.translate(
+    canvasWidth.value / 2 + transform.offsetX,
+    canvasHeight.value / 2 + transform.offsetY,
+  )
   ctx.rotate((transform.rotation * Math.PI) / 180)
   ctx.scale(transform.scale, transform.scale)
-  ctx.drawImage(userImg.value, -userImg.value.width / 2, -userImg.value.height / 2)
+  ctx.drawImage(userImg, -userImg.width / 2, -userImg.height / 2)
   ctx.restore()
 
-  ctx.drawImage(frameImg, 0, 0, canvasSize.width, canvasSize.height)
+  ctx.drawImage(frameImg, 0, 0, canvasWidth.value, canvasHeight.value)
 }
 
 function startDrag(e: MouseEvent) {
@@ -138,35 +137,22 @@ function startDrag(e: MouseEvent) {
   state.dragStartY = e.clientY
 }
 
-function startTouch(e: TouchEvent) {
-  state.dragging = true
-  state.dragStartX = e.touches[0].clientX
-  state.dragStartY = e.touches[0].clientY
-}
-
 function onDrag(e: MouseEvent) {
-  if (!state.dragging || !userImg.value) return
-  handleMove(e.clientX, e.clientY)
-}
+  if (!state.dragging || !userImg) return
 
-function onTouch(e: TouchEvent) {
-  if (!state.dragging || !userImg.value) return
-  handleMove(e.touches[0].clientX, e.touches[0].clientY)
-}
-
-function handleMove(clientX: number, clientY: number) {
-  const dx = clientX - state.dragStartX
-  const dy = clientY - state.dragStartY
+  const dx = e.clientX - state.dragStartX
+  const dy = e.clientY - state.dragStartY
 
   const bounds = getImageBounds()
-  const maxOffsetX = (bounds.width - canvasSize.width) / 2
-  const maxOffsetY = (bounds.height - canvasSize.height) / 2
 
-  transform.offsetX = Math.min(maxOffsetX, Math.max(-maxOffsetX, transform.offsetX + dx))
-  transform.offsetY = Math.min(maxOffsetY, Math.max(-maxOffsetY, transform.offsetY + dy))
+  const maxX = (bounds.width - canvasWidth.value) / 2
+  const maxY = (bounds.height - canvasHeight.value) / 2
 
-  state.dragStartX = clientX
-  state.dragStartY = clientY
+  transform.offsetX = Math.min(maxX, Math.max(-maxX, transform.offsetX + dx))
+  transform.offsetY = Math.min(maxY, Math.max(-maxY, transform.offsetY + dy))
+
+  state.dragStartX = e.clientX
+  state.dragStartY = e.clientY
 
   drawCanvas()
 }
@@ -185,14 +171,20 @@ function rotate() {
   transform.rotation = (transform.rotation + 15) % 360
   drawCanvas()
 }
-
+function handleFrameChange() {
+  frameImg.src = currentFrame.value
+  frameImg.onload = drawCanvas
+}
 function getImageBounds(): { width: number; height: number } {
-  if (!userImg.value) return { width: 0, height: 0 }
-  const w = userImg.value.width * transform.scale
-  const h = userImg.value.height * transform.scale
+  if (!userImg) return { width: 0, height: 0 }
+
+  const w = userImg.width * transform.scale
+  const h = userImg.height * transform.scale
+
   const rad = (transform.rotation * Math.PI) / 180
   const sin = Math.abs(Math.sin(rad))
   const cos = Math.abs(Math.cos(rad))
+
   return {
     width: w * cos + h * sin,
     height: w * sin + h * cos,
@@ -200,13 +192,9 @@ function getImageBounds(): { width: number; height: number } {
 }
 
 function downloadImage() {
-  if (!canvasRef.value) {
-    toast.error('ไม่สามารถดาวน์โหลดภาพได้ 😢')
-    return
-  }
-
-  if (!userImg.value) {
-    toast.warning('กรุณาอัปโหลดภาพก่อนดาวน์โหลด 🙏')
+  if (!canvasRef.value) return
+  if (!userImg) {
+    toast.error('กรุณาอัปโหลดภาพก่อนดาวน์โหลด')
     return
   }
 
@@ -215,28 +203,9 @@ function downloadImage() {
   link.href = canvasRef.value.toDataURL('image/png')
   link.click()
 
-  toast.success('ดาวน์โหลดภาพสำเร็จแล้ว! 🎉')
+  toast.success('✅ ดาวน์โหลดภาพเรียบร้อยแล้ว')
 }
-
-function resizeCanvas() {
-  if (!containerRef.value || !canvasRef.value) return
-  const maxDisplayWidth = containerRef.value.clientWidth
-  const ratio = canvasSize.height / canvasSize.width
-  canvasRef.value.style.width = maxDisplayWidth + 'px'
-  canvasRef.value.style.height = maxDisplayWidth * ratio + 'px'
-}
-
-onMounted(() => {
-  updateCanvasSize()
-  window.addEventListener('resize', resizeCanvas)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', resizeCanvas)
-})
 </script>
-background-image:
-url('https://media.discordapp.net/attachments/660882640240508948/1397947682995175607/63bd0c70-4834-4061-840d-8e77fbfd4cb0.png?ex=688393bc&is=6882423c&hm=c29b814cfa984b558d41934a69743fed9b37398fd068003f4da0979955c35e69&=&format=webp&quality=lossless');
 
 <style scoped>
 /* 🌄 Background wrapper */
