@@ -26,7 +26,9 @@
         @mousemove="onDrag"
         @mouseup="endDrag"
         @wheel.prevent="onWheel"
-      ></canvas>
+        @touchstart="onTouchStart"
+        @touchmove="onTouchMove"
+      />
 
       <!-- 🎮 Action Buttons -->
       <div class="actions">
@@ -78,6 +80,35 @@ let frameImg = new Image()
 function getRandomFramePath(): string {
   const index = Math.floor(Math.random() * framePaths.length)
   return framePaths[index]
+}
+//Touch
+let lastTouchDistance = 0
+
+function onTouchStart(e: TouchEvent) {
+  if (e.touches.length === 2) {
+    lastTouchDistance = getTouchDistance(e.touches)
+  }
+}
+
+function onTouchMove(e: TouchEvent) {
+  if (e.touches.length === 2) {
+    const newDistance = getTouchDistance(e.touches)
+    const delta = newDistance - lastTouchDistance
+
+    if (Math.abs(delta) > 5) {
+      transform.scale = Math.max(0.1, transform.scale + delta * 0.005)
+      drawCanvas()
+    }
+
+    lastTouchDistance = newDistance
+    e.preventDefault() // prevent page scroll
+  }
+}
+
+function getTouchDistance(touches: TouchList): number {
+  const dx = touches[0].clientX - touches[1].clientX
+  const dy = touches[0].clientY - touches[1].clientY
+  return Math.sqrt(dx * dx + dy * dy)
 }
 
 // 📤 Upload Image
