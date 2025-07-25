@@ -14,7 +14,9 @@
       <!-- 🎨 Frame Selector (shows after upload) -->
       <select v-if="imageLoaded" v-model="currentFrame" @change="handleFrameChange">
         <option disabled value="">เลือกกรอบ</option>
-        <option v-for="i in 6" :key="i" :value="`frame${i}.png`">กรอบที่ {{ i }}</option>
+        <option v-for="(label, index) in frameLabels" :key="index" :value="`frame${index + 1}.png`">
+          {{ label }}
+        </option>
       </select>
 
       <!-- 🖼 Canvas -->
@@ -52,6 +54,13 @@ const canvasHeight = ref(1080)
 const imageLoaded = ref(false)
 
 const currentFrame = ref('')
+const frameLabels = [
+  'ผู้พิพากษาเปลวเพลิงดุจปีศาจ',
+  'มังกรทมิฬแห่งนรกอเวจี',
+  'นักโทษรัดเกล้าทองคำ',
+  'จอมวางแผนลับ',
+  'ปกภาพยนตร์',
+]
 const transform = reactive({
   offsetX: 0,
   offsetY: 0,
