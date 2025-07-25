@@ -9,7 +9,8 @@
 
       <!-- 📐 Ratio Selection -->
 
-      <h2 value="4:5">4:5</h2>
+      <h2>ภาพอัตราส่วน 4:5</h2>
+      <lebel>ย่อ-ขยายเพื่อครอปภาพ</lebel>
 
       <!-- 🎨 Frame Selector (shows after upload) -->
       <select v-if="imageLoaded" v-model="currentFrame" @change="handleFrameChange">
